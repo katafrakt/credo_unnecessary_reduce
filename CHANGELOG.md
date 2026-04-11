@@ -14,19 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Some cases involving `product(_by)` / `sum(_by)` (see #4 / thanks @Nezteb)
 - Fuller support for product/sum cases
 
-## [0.3.0] - 2024-05-06
+## [0.3.0] - 2025-05-06
 
 ### Added
 
 - Support for checking for when `Enum.reduce` can be replaced with `Enum.split_with`
 
-## [0.2.0] - 2024-04-29
+## [0.2.0] - 2025-04-29
 
 ### Fixed
 
 - Support for when `Enum.reduce` is used with pipes (#2 / thanks @aleagnelli)
 
-## [0.1.0] - 2024-04-22
+## [0.1.0] - 2025-04-22
 
 ### Added
 
