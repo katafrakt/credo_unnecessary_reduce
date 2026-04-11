@@ -1,7 +1,7 @@
 defmodule CredoUnnecessaryReduce.Check do
   @moduledoc """
-  This Credo check identifies instances where `Enum.reduce` can be 
-  replaced with more idiomatic and efficient functions, such as 
+  This Credo check identifies instances where `Enum.reduce` can be
+  replaced with more idiomatic and efficient functions, such as
   `Enum.filter`, `Enum.map`, `Enum.any?`, and `Map.new`.
 
   """
@@ -183,6 +183,8 @@ defmodule CredoUnnecessaryReduce.Check do
         {:acc_var, :integer, :addition} -> "Enum.count"
         {:acc_var, _, :mult} -> "Enum.product_by"
         {:acc_var, _, :addition} -> "Enum.sum_by"
+        {:other, _, _} -> nil
+        {_, :other, _} -> nil
       end
     end
   end
