@@ -39,7 +39,7 @@ defmodule CredoUnnecessaryReduce.MixProject do
   defp deps do
     [
       {:credo, ">= 1.0.0"},
-      {:mix_test_watch, "~> 1.2", only: :dev, runtime: false},
+      {:mix_test_watch, "~> 1.4", only: :dev, runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:benchee, "~> 1.0", only: :dev},
       {:benchee_html, "~> 1.0", only: :dev},
