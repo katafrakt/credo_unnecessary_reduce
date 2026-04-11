@@ -6,7 +6,7 @@ defmodule CredoUnnecessaryReduce.MixProject do
   def project do
     [
       app: :credo_unnecessary_reduce,
-      version: "0.3.0",
+      version: "0.4.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       description:

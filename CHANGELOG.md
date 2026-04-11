@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **IMPORTANT NOTE**: Make sure to see the [Upgrading Versions](guides/howtos/Upgrading Versions.md) guide in the [HexDocs documentation](https://hexdocs.pm/ecto_watch) if you're having an issue after upgrading.
 
+## [0.4.0] - 2026-04-11
+
+### Fixed
+
+- Some cases involving `product(_by)` / `sum(_by)` (see #4 / thanks @Nezteb)
+- Fuller support for product/sum cases
+
 ## [0.3.0] - 2024-05-06
 
 ### Added
