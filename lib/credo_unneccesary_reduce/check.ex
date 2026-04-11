@@ -55,8 +55,9 @@ defmodule CredoUnnecessaryReduce.Check do
     # Not ideal really, but these might be the only cases we deal with
     # and it would be nice to avoid having `reduce_reducible_to` have to
     # deal with more ast stuff...
+
     new_issue =
-      case reduce_reducible_to(initial_value, item_ast, acc_ast, body_ast) do
+      case reduce_reducible_to(initial_value, item_ast, acc_ast, false, body_ast) do
         suggested_functions when is_list(suggested_functions) ->
           suggestions = Enum.join(suggested_functions, " or ")
 
@@ -94,16 +95,33 @@ defmodule CredoUnnecessaryReduce.Check do
          initial_value,
          item_ast,
          acc_ast,
+         previous_ast_references_var,
          {:__block__, _, list_ast}
        )
        when is_list(list_ast) do
-    reduce_reducible_to(initial_value, item_ast, acc_ast, List.last(list_ast))
+    ast_references_var =
+      case item_ast do
+        {item_var, _, nil} ->
+          Enum.any?(list_ast, &ast_references_var?(&1, item_var))
+
+        _ ->
+          false
+      end
+
+    reduce_reducible_to(
+      initial_value,
+      item_ast,
+      acc_ast,
+      previous_ast_references_var || ast_references_var,
+      List.last(list_ast)
+    )
   end
 
   defp reduce_reducible_to(
          [],
          _item_ast,
          {acc_var, _, nil},
+         _,
          {:++, _, [{acc_var, _, nil}, list_ast]}
        )
        when is_list(list_ast) do
@@ -123,6 +141,7 @@ defmodule CredoUnnecessaryReduce.Check do
          [],
          _item_ast,
          {acc_var, _, nil},
+         _,
          list_ast
        )
        when is_list(list_ast) do
@@ -138,6 +157,7 @@ defmodule CredoUnnecessaryReduce.Check do
          initial_value,
          item_ast,
          {acc_var, _, nil},
+         _,
          {:if, _, [_, [do: ast, else: {acc_var, _, nil}]]}
        ) do
     if_is_reducible_to(initial_value, item_ast, acc_var, ast)
@@ -147,6 +167,7 @@ defmodule CredoUnnecessaryReduce.Check do
          initial_value,
          item_ast,
          {acc_var, _, nil},
+         _,
          {:if, _, [_, [do: {acc_var, _, nil}, else: ast]]}
        ) do
     if_is_reducible_to(initial_value, item_ast, acc_var, ast)
@@ -156,6 +177,7 @@ defmodule CredoUnnecessaryReduce.Check do
          init,
          {item_var, _, nil},
          {acc_var, _, nil},
+         ast_references_var,
          {operation, _, [part1_ast, part2_ast]}
        )
        when operation in ~w[+ - *]a do
@@ -165,10 +187,24 @@ defmodule CredoUnnecessaryReduce.Check do
       [type1, type2] =
         [part1_ast, part2_ast]
         |> Enum.map(fn
-          {^acc_var, _, nil} -> :acc_var
-          {^item_var, _, nil} -> :item_var
-          part when is_integer(part) -> :integer
-          _ -> :other
+          {^acc_var, _, nil} ->
+            :acc_var
+
+          {^item_var, _, nil} ->
+            :item_var
+
+          part when is_integer(part) ->
+            :integer
+
+          other_ast ->
+            # Either we came here as the last line of the reduce block
+            # or we were the only line of the reduce block
+            # We need to check both cases
+            if ast_references_var || ast_references_var?(other_ast, item_var) do
+              :ast_references_var
+            else
+              :other
+            end
         end)
         |> Enum.sort()
 
@@ -177,14 +213,26 @@ defmodule CredoUnnecessaryReduce.Check do
       operation_type = if(operation == :*, do: :mult, else: :addition)
 
       case {type1, type2, operation_type} do
-        {:acc_var, :item_var, :mult} -> "Enum.product"
-        {:acc_var, :item_var, :addition} -> "Enum.sum"
-        {:acc_var, :integer, :mult} -> nil
-        {:acc_var, :integer, :addition} -> "Enum.count"
-        {:acc_var, _, :mult} -> "Enum.product_by"
-        {:acc_var, _, :addition} -> "Enum.sum_by"
-        {:other, _, _} -> nil
-        {_, :other, _} -> nil
+        {:acc_var, :item_var, :mult} ->
+          "Enum.product"
+
+        {:acc_var, :item_var, :addition} ->
+          "Enum.sum"
+
+        {:acc_var, :ast_references_var, :mult} ->
+          "Enum.product_by"
+
+        {:acc_var, :ast_references_var, :addition} ->
+          "Enum.sum_by"
+
+        {:acc_var, :integer, :mult} ->
+          nil
+
+        {:acc_var, :integer, :addition} ->
+          "Enum.count"
+
+        {_, _, _} ->
+          nil
       end
     end
   end
@@ -193,6 +241,7 @@ defmodule CredoUnnecessaryReduce.Check do
          true,
          _item_ast,
          {acc_var, _, nil},
+         _,
          {operator, _,
           [
             {acc_var, _, nil},
@@ -207,6 +256,7 @@ defmodule CredoUnnecessaryReduce.Check do
          true,
          _item_ast,
          {acc_var, _, nil},
+         _,
          {operator, _,
           [
             _,
@@ -221,6 +271,7 @@ defmodule CredoUnnecessaryReduce.Check do
          false,
          _item_ast,
          {acc_var, _, nil},
+         _,
          {operator, _,
           [
             {acc_var, _, nil},
@@ -235,6 +286,7 @@ defmodule CredoUnnecessaryReduce.Check do
          false,
          _item_ast,
          {acc_var, _, nil},
+         _,
          {operator, _,
           [
             _,
@@ -249,6 +301,7 @@ defmodule CredoUnnecessaryReduce.Check do
          {:%{}, _, _},
          _item_ast,
          {acc_var, _, nil},
+         _,
          {{:., _, [{:__aliases__, _, [:Map]}, :put]}, _,
           [
             {acc_var, _, nil},
@@ -263,6 +316,7 @@ defmodule CredoUnnecessaryReduce.Check do
          {[], []},
          {_item_var, _, nil},
          {{_true_ast_var, _, nil}, {_false_ast_var, _, nil}},
+         _,
          {:if, _,
           [
             _,
@@ -305,11 +359,11 @@ defmodule CredoUnnecessaryReduce.Check do
     end
   end
 
-  defp reduce_reducible_to(_initial_value, _item_ast, _acc_ast, _ast) do
+  defp reduce_reducible_to(_initial_value, _item_ast, _acc_ast, _ast_references_var, _ast) do
     nil
   end
 
-  # defp reduce_reducible_to(initial_value, item_ast, acc_ast, ast) do
+  # defp reduce_reducible_to(initial_value, item_ast, acc_ast, ast_references_var, ast) do
   #   dbg()
   #   nil
   # end
@@ -350,6 +404,22 @@ defmodule CredoUnnecessaryReduce.Check do
   defp is_ast_number?(number) when is_integer(number) or is_float(number), do: true
   defp is_ast_number?({:-, _, [number]}) when is_integer(number) or is_float(number), do: true
   defp is_ast_number?(_), do: false
+
+  # Recursively checks if a variable is referenced anywhere in the AST
+  defp ast_references_var?({var, _, nil}, var), do: true
+  defp ast_references_var?({var, _, _context}, var), do: true
+
+  defp ast_references_var?(ast, var) when is_tuple(ast) do
+    ast
+    |> Tuple.to_list()
+    |> Enum.any?(&ast_references_var?(&1, var))
+  end
+
+  defp ast_references_var?(ast, var) when is_list(ast) do
+    Enum.any?(ast, &ast_references_var?(&1, var))
+  end
+
+  defp ast_references_var?(_ast, _var), do: false
 
   defp issue_for(issue_meta, line_no, message) do
     format_issue(

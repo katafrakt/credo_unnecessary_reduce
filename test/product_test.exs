@@ -178,6 +178,66 @@ defmodule CredoUnnecessaryReduce.ProductTest do
       |> assert_check_issue("Consider using Enum.product_by instead of Enum.reduce.")
     end
 
+    test "complex expressions with function calls" do
+      """
+      defmodule NeoWeb.TestModule do
+        def calculate(numbers) do
+          Enum.reduce(numbers, 1, fn item, acc ->
+            acc * abs(item)
+          end)
+        end
+      end
+      """
+      |> to_source_file("lib/neo_web/test_module.ex")
+      |> run_check(Check)
+      |> assert_check_issue("Consider using Enum.product_by instead of Enum.reduce.")
+    end
+
+    test "map access in mathematical operations" do
+      """
+      defmodule NeoWeb.TestModule do
+        def calculate(items) do
+          Enum.reduce(items, 1, fn item, acc ->
+            acc * item.multiplier
+          end)
+        end
+      end
+      """
+      |> to_source_file("lib/neo_web/test_module.ex")
+      |> run_check(Check)
+      |> assert_check_issue("Consider using Enum.product_by instead of Enum.reduce.")
+    end
+
+    test "item isn't referenced" do
+      # You could use Enum.product / product_by maybe, but probably better
+      # do not use a loop at all
+      """
+      defmodule NeoWeb.TestModule do
+        def calculate(items) do
+          Enum.reduce(items, 1, fn item, acc ->
+            acc * 4.3
+          end)
+        end
+      end
+      """
+      |> to_source_file("lib/neo_web/test_module.ex")
+      |> run_check(Check)
+      |> refute_issues()
+
+      """
+      defmodule NeoWeb.TestModule do
+        def calculate(items) do
+          Enum.reduce(items, 1, fn item, acc ->
+            acc * "some string"
+          end)
+        end
+      end
+      """
+      |> to_source_file("lib/neo_web/test_module.ex")
+      |> run_check(Check)
+      |> refute_issues()
+    end
+
     def assert_check_issue(code, message) do
       code
       |> assert_issue(fn issue ->
@@ -185,5 +245,39 @@ defmodule CredoUnnecessaryReduce.ProductTest do
         assert issue.category == :refactor
       end)
     end
+  end
+
+  test "both operands are complex expressions (no accumulator)" do
+    # This tests the {:other, :other, :mult} pattern added in PR #4
+    # Neither operand is the accumulator variable, so this is not a standard
+    # accumulation pattern and should not crash or trigger false positives
+    """
+    defmodule NeoWeb.TestModule do
+      def calculate(items) do
+        Enum.reduce(items, 1, fn item, _acc ->
+          abs(item.x) * abs(item.y)
+        end)
+      end
+    end
+    """
+    |> to_source_file("lib/neo_web/test_module.ex")
+    |> run_check(Check)
+    |> refute_issues()
+  end
+
+  test "accumulator multiplied by constant integer" do
+    # This tests the {:acc_var, :integer, :mult} pattern
+    """
+    defmodule NeoWeb.TestModule do
+      def calculate(items) do
+        Enum.reduce(items, 1, fn _item, acc ->
+          acc * 5
+        end)
+      end
+    end
+    """
+    |> to_source_file("lib/neo_web/test_module.ex")
+    |> run_check(Check)
+    |> refute_issues()
   end
 end
